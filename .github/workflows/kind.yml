@@ -1,0 +1,80 @@
+name: KinD tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+defaults:
+  run:
+    shell: bash
+    working-directory: gatekeeper-addon
+
+jobs:
+  kind-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # KinD tags: https://hub.docker.com/r/kindest/node/tags
+        # (OCP 4.6 runs Kubernetes v1.19)
+        kind:
+          - 'v1.19.16'
+          - 'latest'
+        hosted_mode:
+          - "true"
+          - "false"
+    name: KinD tests
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        path: gatekeeper-addon
+        fetch-depth: 0 # Fetch all history for all tags and branches
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: gatekeeper-addon/go.mod
+
+    - name: Create KinD Cluster (${{ matrix.kind }}) and deploy components
+      env:
+        KIND_VERSION: ${{ matrix.kind }}
+        HOSTED_MODE: ${{ matrix.hosted_mode }}
+      run: |
+        ./build/manage-clusters.sh
+
+    - if: matrix.hosted_mode == 'false'
+      name: E2E tests
+      run: |
+        export GOPATH=$(go env GOPATH)
+        make wait-for-work-agent
+        make e2e-test-coverage
+
+    - if: matrix.hosted_mode == 'true'
+      name: E2E tests hosted mode
+      run: |
+        export GOPATH=$(go env GOPATH)
+        make wait-for-work-agent
+        make e2e-test-hosted-mode
+
+    - name: Test Coverage Verification
+      if: |
+        github.event_name == 'pull_request' &&
+        matrix.hosted_mode == 'false'
+      run: |
+        make test-coverage
+        make coverage-verify
+
+    - name: Debug
+      if: ${{ failure() }}
+      run: |
+        RUN_MODE="debug" ./build/manage-clusters.sh
+
+    - name: Clean up clusters
+      if: ${{ always() }}
+      run: |
+        RUN_MODE="delete" ./build/manage-clusters.sh

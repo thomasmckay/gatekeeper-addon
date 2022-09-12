@@ -1,0 +1,44 @@
+name: Linting and Unit tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+defaults:
+  run:
+    shell: bash
+    working-directory: gatekeeper-addon
+
+jobs:
+  linting-and-unit-tests:
+    runs-on: ubuntu-latest
+    name: Linting and Unit tests
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        path: gatekeeper-addon
+        fetch-depth: 0 # Fetch all history for all tags and branches
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: gatekeeper-addon/go.mod
+
+    - name: Verify modules
+      run: |
+        go mod verify
+
+    - name: Verify format
+      run: |
+        make fmt
+        git diff --exit-code
+        make lint
+
+    - name: Unit and Integration Tests
+      run: |
+        make test

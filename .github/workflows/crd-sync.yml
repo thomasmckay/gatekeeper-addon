@@ -1,0 +1,35 @@
+name: CRD Sync Validation
+
+on:
+  schedule:
+    # every midnight
+    - cron:  '0 0 * * *'
+
+defaults:
+  run:
+    shell: bash
+    working-directory: gatekeeper-addon
+
+jobs:
+  crd-sync-validation:
+    runs-on: ubuntu-latest
+    name: CRD Sync Validation
+    steps:
+    - name: Checkout 
+      uses: actions/checkout@v3
+      with:
+        path: gatekeeper-addon
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: gatekeeper-addon/go.mod
+
+    - name: Synchronize CRDs
+      run: |
+        ./build/crd-sync.sh
+
+    - name: Check for any changes
+      run: |
+        git diff --exit-code
+
